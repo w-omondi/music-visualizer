@@ -8,10 +8,13 @@ import { LiquidDimensionScene } from '@/components/LiquidDimensionScene';
 import { VisualizerSceneProvider } from '@/components/VisualizerSceneContext';
 import type { AudioAnalyzer, VisualizerSettings } from '@/lib/audioAnalyzer';
 
+export type VisualizerSceneName = 'event-horizon' | 'liquid-dimension';
+
 type VisualizerSceneProps = {
     analyzer: AudioAnalyzer | null;
     settings: VisualizerSettings;
     isPlaying: boolean;
+    selectedScene: VisualizerSceneName;
     onCanvasReady?: (canvas: HTMLCanvasElement) => void;
     onCanvasError?: (message: string) => void;
 };
@@ -34,15 +37,13 @@ export function VisualizerScene({
     analyzer,
     settings,
     isPlaying,
+    selectedScene,
     onCanvasReady,
     onCanvasError,
 }: VisualizerSceneProps) {
     const barsRef = useRef<Array<HTMLDivElement | null>>([]);
     const cleanupCanvasRef = useRef<(() => void) | null>(null);
     const [shaderFailed, setShaderFailed] = useState(false);
-    const [selectedScene, setSelectedScene] = useState<'event-horizon' | 'liquid-dimension'>(
-        'event-horizon',
-    );
     const reducedMotion = useReducedMotionPreference();
 
     const handleCanvasCreated = useCallback(
@@ -132,32 +133,6 @@ export function VisualizerScene({
                     )}
                 </VisualizerSceneProvider>
             </Canvas>
-            <div
-                className="absolute right-3 top-3 z-10 flex gap-1 rounded-lg border border-border-subtle bg-panel p-1 sm:right-4 sm:top-4"
-                role="group"
-                aria-label="Visualizer scene"
-            >
-                {(
-                    [
-                        ['event-horizon', 'Event Horizon'],
-                        ['liquid-dimension', 'Liquid Dimension'],
-                    ] as const
-                ).map(([scene, label]) => (
-                    <button
-                        key={scene}
-                        type="button"
-                        aria-pressed={selectedScene === scene}
-                        onClick={() => setSelectedScene(scene)}
-                        className={`rounded-md px-2 py-1.5 text-[0.58rem] font-medium transition sm:px-2.5 sm:text-[0.65rem] ${
-                            selectedScene === scene
-                                ? 'bg-raised text-accent-cyan'
-                                : 'text-text-muted hover:bg-raised hover:text-foreground'
-                        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan`}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
             <div
                 className="pointer-events-none absolute bottom-3 left-3 z-10 w-44 max-w-[calc(100%-1.5rem)] rounded-lg border border-border-subtle bg-panel/95 px-2 py-1.5 sm:bottom-4 sm:left-4 sm:w-64 sm:px-3.5 sm:py-2.5"
                 role="img"

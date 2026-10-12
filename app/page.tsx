@@ -16,8 +16,13 @@ import {
     Volume2,
 } from 'lucide-react';
 
-import { VisualizerScene } from '@/components/VisualizerScene';
+import { VisualizerScene, type VisualizerSceneName } from '@/components/VisualizerScene';
 import { AudioAnalyzer, type VisualizerSettings } from '@/lib/audioAnalyzer';
+
+const DEFAULT_TRACKS = [
+    { name: 'Lifted', src: '/tracks/lifted.mp3' },
+    { name: 'Zep', src: '/tracks/zep.mp3' },
+] as const;
 
 export default function Home() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -31,10 +36,10 @@ export default function Home() {
         timeout: ReturnType<typeof setTimeout> | null;
     } | null>(null);
     const [settings, setSettings] = useState<VisualizerSettings>({ sensitivity: 2 });
-    const [audioUrl, setAudioUrl] = useState<string | null>(null);
-    const [trackName, setTrackName] = useState<string | null>(null);
+    const [audioUrl, setAudioUrl] = useState<string | null>(DEFAULT_TRACKS[0].src);
+    const [trackName, setTrackName] = useState<string | null>(DEFAULT_TRACKS[0].name);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+    const [isLoadingTrack, setIsLoadingTrack] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(0.8);
@@ -42,6 +47,7 @@ export default function Home() {
     const [isExporting, setIsExporting] = useState(false);
     const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    const [selectedScene, setSelectedScene] = useState<VisualizerSceneName>('event-horizon');
 
     const formatTime = (value: number) => {
         if (!Number.isFinite(value) || value < 0) {
@@ -82,6 +88,11 @@ export default function Home() {
         audio.addEventListener('canplay', onCanPlay);
         audio.addEventListener('error', onAudioError);
         audio.addEventListener('ended', onEnded);
+
+        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+            setDuration(audio.duration || 0);
+            setIsLoadingTrack(false);
+        }
 
         return () => {
             audio.removeEventListener('play', onPlay);
@@ -187,6 +198,37 @@ export default function Home() {
             console.error('Audio playback failed', error);
             setStatusMessage('Playback was blocked or failed. Try pressing play again.');
         }
+    };
+
+    const selectDefaultTrack = (track: (typeof DEFAULT_TRACKS)[number]) => {
+        const audio = audioRef.current;
+        if (!audio) {
+            return;
+        }
+
+        if (audioUrl === track.src) {
+            if (audio.paused) {
+                void startPlayback(audio);
+            }
+            return;
+        }
+
+        const previousUrl = audioUrlRef.current;
+        if (previousUrl) {
+            URL.revokeObjectURL(previousUrl);
+            audioUrlRef.current = null;
+        }
+
+        setStatusMessage(null);
+        setAudioUrl(track.src);
+        setTrackName(track.name);
+        setIsLoadingTrack(true);
+        setCurrentTime(0);
+        setDuration(0);
+        setIsPlaying(false);
+        audio.src = track.src;
+        audio.load();
+        void startPlayback(audio);
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,17 +379,11 @@ export default function Home() {
             <div className="relative z-10 flex min-h-dvh flex-col md:h-full md:min-h-0">
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-6 sm:py-3 lg:px-8">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-raised text-accent-cyan sm:h-10 sm:w-10">
-                            <Music4 className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </div>
-                        <div>
-                            <p className="hidden text-[0.55rem] uppercase tracking-[0.2rem] text-text-muted sm:block sm:text-[0.65rem] sm:tracking-[0.28rem]">
-                                Audio visualizer
-                            </p>
+
                             <h1 className="text-base font-semibold text-foreground sm:text-lg">
                                 Luma Pulse
                             </h1>
-                        </div>
+
                     </div>
 
                     <div className="flex max-w-[55%] items-center gap-2 border-l border-border-subtle pl-3 text-xs text-text-muted sm:max-w-full sm:text-sm">
@@ -374,28 +410,23 @@ export default function Home() {
                             analyzer={analyzer}
                             settings={settings}
                             isPlaying={isPlaying}
+                            selectedScene={selectedScene}
                             onCanvasReady={setCanvasElement}
                             onCanvasError={setStatusMessage}
                         />
                     </div>
 
-                    <aside className="visualizer-panel relative z-10 flex w-full min-w-0 flex-col justify-start gap-3 overflow-hidden rounded-xl border border-border-subtle bg-panel p-3 sm:rounded-3xl sm:p-4 md:min-h-0 md:justify-between lg:p-5">
-                        <div className="visualizer-panel-top relative space-y-3 sm:space-y-4 lg:space-y-5">
+                    <aside className="visualizer-panel relative z-10 flex w-full min-w-0 flex-col gap-3 overflow-visible rounded-xl border border-border-subtle bg-panel p-3 sm:rounded-3xl sm:p-4 md:min-h-0 md:gap-2.5 md:overflow-y-auto lg:p-4">
+                        <div className="visualizer-panel-top relative shrink-0 space-y-2 sm:space-y-3">
                             <div className="flex items-start justify-between">
                                 <div className="space-y-1">
-                                    <p className="text-[0.58rem] font-medium uppercase tracking-[0.22rem] text-accent-cyan sm:text-[0.65rem]">
-                                        Sound response
-                                    </p>
-                                    <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                                    <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
                                         Fine-tune your scene
                                     </h2>
-                                    <p className="hidden max-w-[24rem] text-[0.68rem] leading-relaxed text-text-muted sm:block sm:text-xs">
-                                        Set how strongly the world moves with every beat.
-                                    </p>
                                 </div>
                                 <button
                                     type="button"
-                                    className="rounded-lg border border-border-subtle bg-raised p-2 text-highlight-neutral transition hover:border-accent-cyan/50 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:p-2.5"
+                                    className="rounded-lg border border-border-subtle bg-raised p-1.5 text-highlight-neutral transition hover:border-accent-cyan/50 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:p-2"
                                     onClick={toggleFullscreen}
                                     title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                                     aria-label={
@@ -403,24 +434,53 @@ export default function Home() {
                                     }
                                 >
                                     {isFullscreen ? (
-                                        <Minimize2 className="h-4 w-4" />
+                                        <Minimize2 className="h-3.5 w-3.5" />
                                     ) : (
-                                        <Expand className="h-4 w-4" />
+                                        <Expand className="h-3.5 w-3.5" />
                                     )}
                                 </button>
                             </div>
 
-                            <label className="block rounded-xl border border-border-subtle bg-background p-3.5 sm:p-4">
-                                <div className="mb-3 flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="shrink-0 text-xs font-medium text-highlight-neutral">
+                                    Scene
+                                </span>
+                                <div
+                                    className="flex min-w-0 gap-1 rounded-lg border border-border-subtle bg-background p-1"
+                                    role="group"
+                                    aria-label="Visualizer scene"
+                                >
+                                    {(
+                                        [
+                                            ['event-horizon', 'Event Horizon'],
+                                            ['liquid-dimension', 'Liquid Dimension'],
+                                        ] as const
+                                    ).map(([scene, label]) => (
+                                        <button
+                                            key={scene}
+                                            type="button"
+                                            aria-pressed={selectedScene === scene}
+                                            onClick={() => setSelectedScene(scene)}
+                                            className={`min-w-0 truncate rounded-md px-2 py-1.5 text-[0.62rem] font-medium transition sm:text-xs ${
+                                                selectedScene === scene
+                                                    ? 'bg-raised text-accent-cyan'
+                                                    : 'text-text-muted hover:bg-raised hover:text-foreground'
+                                            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <label className="block rounded-lg border border-border-subtle bg-background p-2.5 sm:p-3">
+                                <div className="mb-2 flex items-center justify-between">
                                     <div>
                                         <span className="text-xs font-medium text-highlight-neutral sm:text-sm">
                                             Sensitivity
                                         </span>
-                                        <p className="mt-0.5 text-[0.62rem] text-text-muted">
-                                            Overall audio response
-                                        </p>
                                     </div>
-                                    <span className="rounded-md border border-border-subtle bg-raised px-2 py-1 font-mono text-xs tabular-nums text-accent-cyan sm:text-sm">
+                                    <span className="rounded-md border border-border-subtle bg-raised px-2 py-0.5 font-mono text-xs tabular-nums text-accent-cyan">
                                         {settings.sensitivity.toFixed(1)}×
                                     </span>
                                 </div>
@@ -437,16 +497,43 @@ export default function Home() {
                                     }
                                     className="h-2 w-full cursor-pointer appearance-none rounded-full bg-raised accent-cyan-300 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                                 />
-                                <div className="mt-2 flex justify-between text-[0.58rem] uppercase tracking-[0.1rem] text-text-muted sm:text-[0.62rem]">
+                                <div className="mt-1.5 flex justify-between text-[0.55rem] uppercase tracking-[0.08rem] text-text-muted sm:text-[0.6rem]">
                                     <span>Subtle</span>
                                     <span>Balanced</span>
                                     <span>Dynamic</span>
                                 </div>
                             </label>
 
+                            <div className="space-y-1.5">
+                                <p className="px-1 text-[0.68rem] font-medium text-highlight-neutral">
+                                    Sample tracks
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {DEFAULT_TRACKS.map((track) => (
+                                        <button
+                                            key={track.src}
+                                            type="button"
+                                            aria-pressed={audioUrl === track.src}
+                                            onClick={() => selectDefaultTrack(track)}
+                                            className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan ${
+                                                audioUrl === track.src
+                                                    ? 'border-accent-cyan/50 bg-raised text-accent-cyan'
+                                                    : 'border-border-subtle bg-background text-highlight-neutral hover:bg-raised'
+                                            }`}
+                                        >
+                                            <FileAudio2
+                                                className="h-4 w-4 shrink-0"
+                                                aria-hidden="true"
+                                            />
+                                            <span className="truncate">{track.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {(statusMessage || isLoadingTrack || isPlaying || audioUrl) && (
                                 <div
-                                    className="flex min-h-10 items-center gap-2.5 rounded-lg border border-border-subtle bg-background px-3 py-2.5"
+                                    className="flex min-h-9 items-center gap-2 rounded-lg border border-border-subtle bg-background px-2.5 py-2"
                                     aria-live="polite"
                                 >
                                     {statusMessage ? (
@@ -484,12 +571,12 @@ export default function Home() {
                             )}
                         </div>
 
-                        <div className="visualizer-panel-bottom mt-2 space-y-2 sm:mt-3 sm:space-y-3 lg:mt-4">
+                        <div className="visualizer-panel-bottom mt-0 shrink-0 space-y-2 md:mt-auto">
                             <div className="flex items-center gap-1.5 rounded-xl border border-border-subtle bg-raised p-1.5 sm:gap-2 sm:p-2">
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-accent-cyan transition hover:border-accent-cyan/50 hover:bg-accent-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:h-11 sm:w-11 sm:rounded-xl"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-accent-cyan transition hover:border-accent-cyan/50 hover:bg-accent-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:h-10 sm:w-10 sm:rounded-xl"
                                     title="Upload audio"
                                     aria-label="Upload audio"
                                 >
@@ -499,7 +586,7 @@ export default function Home() {
                                 <button
                                     type="button"
                                     onClick={togglePlayback}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-highlight-neutral transition hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:h-11 sm:w-11 sm:rounded-xl"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-highlight-neutral transition hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:h-10 sm:w-10 sm:rounded-xl"
                                     title={isPlaying ? 'Pause' : 'Play'}
                                     aria-label={isPlaying ? 'Pause playback' : 'Play playback'}
                                 >
@@ -514,7 +601,7 @@ export default function Home() {
                                     type="button"
                                     onClick={exportVideo}
                                     disabled={!canvasElement || isExporting}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-accent-violet transition hover:bg-accent-violet/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-11 sm:rounded-xl"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-panel text-accent-violet transition hover:bg-accent-violet/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
                                     title={isExporting ? 'Recording export' : 'Export WebM'}
                                     aria-label={isExporting ? 'Recording export' : 'Export WebM'}
                                 >
@@ -543,8 +630,8 @@ export default function Home() {
                                 </div>
                             </div>
 
-                            <div className="rounded-xl border border-border-subtle bg-panel p-2 sm:rounded-2xl sm:p-3">
-                                <div className="mb-1.5 flex items-center justify-between text-[0.58rem] uppercase tracking-[0.12rem] text-text-muted sm:mb-2 sm:text-[0.65rem] sm:tracking-[0.2rem]">
+                            <div className="rounded-lg border border-border-subtle bg-panel p-2">
+                                <div className="mb-1 flex items-center justify-between text-[0.58rem] uppercase tracking-[0.1rem] text-text-muted sm:text-[0.62rem]">
                                     <span>Timeline</span>
                                     <span>
                                         {formatTime(currentTime)} / {formatTime(duration)}
